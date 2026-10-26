@@ -1,0 +1,24 @@
+# App topology only. Supply an authenticated MongoDB replica-set/Atlas URI in backEnd/.env.
+# Put a TLS ingress in front of frontend before using real data.
+services:
+  backend:
+    build: ./backEnd
+    env_file: ./backEnd/.env
+    environment:
+      NODE_ENV: production
+      UPLOAD_DIR: /app/uploads/medical-records
+    volumes:
+      - medical-records:/app/uploads/medical-records
+    restart: unless-stopped
+    expose:
+      - "8080"
+  frontend:
+    build: ./frontEnd
+    ports:
+      - "8081:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  medical-records:

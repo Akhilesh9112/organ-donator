@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.*
+!.env.example
+uploads/
+build/
+coverage/
+test-results/
+playwright-report/
+*.log
+**/node_modules/
+frontEnd/build/
+frontEnd/dist/

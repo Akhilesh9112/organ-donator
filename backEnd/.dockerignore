@@ -1,0 +1,8 @@
+node_modules
+.env
+.env.*
+uploads
+tests
+scripts/browser-fixture.mjs
+scripts/baseline.mjs
+*.log

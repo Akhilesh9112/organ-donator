@@ -1,0 +1,13 @@
+{
+  "name": "organsync",
+  "version": "2.2.0",
+  "private": true,
+  "scripts": {
+    "setup": "npm ci --prefix backEnd && npm ci --prefix frontEnd",
+    "test": "npm test --prefix backEnd && npm test --prefix frontEnd",
+    "build": "npm run build --prefix frontEnd"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}

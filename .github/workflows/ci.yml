@@ -1,0 +1,32 @@
+name: OrganSync checks
+on: [push, pull_request]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            backEnd/package-lock.json
+            frontEnd/package-lock.json
+      - run: npm ci
+        working-directory: backEnd
+      - run: npm test
+        working-directory: backEnd
+      - run: npm audit --omit=dev --audit-level=moderate
+        working-directory: backEnd
+      - run: npm ci
+        working-directory: frontEnd
+      - run: npm test
+        working-directory: frontEnd
+      - run: npm run build
+        working-directory: frontEnd
+      - run: npm audit --audit-level=moderate
+        working-directory: frontEnd
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontEnd
+      - run: npm run test:browser
+        working-directory: frontEnd

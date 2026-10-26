@@ -1,0 +1,33 @@
+import {MongoMemoryReplSet} from 'mongodb-memory-server';
+import mongoose from 'mongoose';
+import bcrypt from 'bcrypt';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import express from 'express';
+process.env.NODE_ENV='test';process.env.JWT_SECRET='browser-test-secret-longer-than-thirty-two-characters';process.env.MAIL_MODE='disabled';process.env.UPLOAD_DIR=await fs.mkdtemp(path.join(os.tmpdir(),'organsync-browser-'));process.env.FRONTEND_URL='http://127.0.0.1:18080';
+const db=await MongoMemoryReplSet.create({replSet:{count:1,args:['--nounixsocket']},binary:{version:'7.0.24'}});
+await mongoose.connect(db.getUri(),{dbName:'browser'});
+const {default:app}=await import('../app.js');
+const {default:User}=await import('../models/User.js');
+const {default:Pledge}=await import('../models/Pledge.js');
+const {default:MedicalRecord}=await import('../models/MedicalRecord.js');
+const {default:MatchRecommendation}=await import('../models/MatchRecommendation.js');
+const {default:OrganRequest}=await import('../models/OrganRequest.js');
+const {default:Allocation}=await import('../models/Allocation.js');
+const {default:Appointment}=await import('../models/Appointment.js');
+for(const m of Object.values(mongoose.models))await m.init();
+const password=await bcrypt.hash('TestPass123!',10),people={};
+for(const [role,fullName] of [['admin','Saif Ahmed'],['hospital','Greenfield Care Hospital'],['donor','Aarav Sharma'],['recipient','Meera Patel']])people[role]=await User.create({role,fullName,email:`${role}@example.test`,phone:'9876543210',password,bloodGroup:'O+',organ:'Kidney',donationType:'Living',consent:true,license:role==='hospital'?'TEST-HOSP-1042':undefined,verificationState:role==='hospital'?'Verified':'Pending'});
+for(const role of ['donor','recipient']){people[role].careHospitalId=people.hospital._id;await people[role].save();await MedicalRecord.create({user:people[role]._id,hospitalId:people.hospital._id,documentType:'Blood Group Report',originalFileName:'synthetic-lab-report.pdf',storedFileName:'synthetic.pdf',filePath:path.join(process.env.UPLOAD_DIR,'synthetic.pdf'),mimeType:'application/pdf',verificationStatus:'Verified',extractionStatus:'Extracted',extractedData:{bloodGroup:'O+'},verifiedBy:people.hospital._id,verifiedAt:new Date()});}
+await User.create({role:'hospital',fullName:'Lakeside Medical Centre',email:'pending@example.test',phone:'9876543210',password,license:'TEST-PENDING-2004'});
+const p=await Pledge.create({donorId:people.donor._id,organ:'Kidney',donationType:'Living'});
+const liverPledge=await Pledge.create({donorId:people.donor._id,organ:'Liver',donationType:'Living',status:'Matched - Donor Accepted'});
+await MatchRecommendation.create({recipientId:people.recipient._id,donorId:people.donor._id,pledgeId:p._id,hospitalId:people.hospital._id,organ:'Kidney',donationType:'Living',bloodGroup:'O+',factors:['Matching verified blood group','Active pledge'],missingEvidence:['Clinical crossmatch','Organ-specific eligibility','Final approvals']});
+const q=await OrganRequest.create({recipientId:people.recipient._id,donorId:people.donor._id,pledgeId:liverPledge._id,hospitalId:people.hospital._id,organ:'Liver',donationType:'Living',bloodGroup:'O+',status:'Scheduled'});
+const a=await Allocation.create({requestId:q._id,donorId:people.donor._id,recipientId:people.recipient._id,pledgeId:liverPledge._id,hospitalId:people.hospital._id,organ:'Liver',donationType:'Living',status:'Scheduled'});
+await Appointment.create({user:people.recipient._id,donorId:people.donor._id,hospitalId:people.hospital._id,requestId:q._id,allocationId:a._id,organ:'Liver',donationType:'Living',date:new Date('2030-01-15'),time:'10:00',scheduledAt:new Date('2030-01-15T04:30:00Z'),surgeon:'Dr. Kavya Rao'});
+const website=express();website.use('/api', (req,res,next)=>{req.url='/api'+req.url;app(req,res,next);});website.use(express.static(path.resolve('../frontEnd/build')));website.use((req,res)=>res.sendFile(path.resolve('../frontEnd/build/index.html')));
+const listener=website.listen(18080,'0.0.0.0',()=>console.log('BROWSER_FIXTURE_READY'));
+async function stop(){listener.close();await mongoose.disconnect();await db.stop();await fs.rm(process.env.UPLOAD_DIR,{recursive:true,force:true});process.exit();}
+process.on('SIGINT',stop);process.on('SIGTERM',stop);
